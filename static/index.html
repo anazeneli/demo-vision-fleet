@@ -2,38 +2,78 @@
 <html>
 
 <head>
-  <title>Inventory Dashboard</title>
+  <title>OCR Inventory Dashboard</title>
   <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 
 <body>
-  <div id="main">
-    <div>
-      <h1>Inventory Dashboard</h1>
-    </div>
-    <script type="module" src="main.js"></script>
-    <div>
-      <h2>Receipt Items & Totals</h2>
-      <p>The following shows grouped inventory items and spending totals from recent receipts:</p>
-    </div>
-    <div id="insert-readings">
-      <div class="spinner-container">
-        <div class="spinner"></div>
-        <p><i>Loading inventory data...
-            It may take a few moments for the data to load.
-            Do not refresh page.</i></p>
+  <!-- Modern header -->
+  <header class="dashboard-header">
+    <div class="header-content">
+      <!-- Left side -->
+      <div class="header-left">
+        <div class="logo-group">
+          <img src="assistiq_logo.png" alt="AssistIQ Logo" class="logo" />
+        </div>
+        <div class="header-text">
+          <h1 class="dashboard-title">OCR Inventory Dashboard</h1>
+          <p class="dashboard-subtitle">Receipt Processing System</p>
+        </div>
+      </div>
+
+      <!-- Center tabs -->
+      <div class="tab-navigation">
+        <button class="tab-btn active" onclick="showCurrentView()">
+          Current Receipt
+        </button>
+        <button class="tab-btn" onclick="showHistoryView()">
+          Receipt History
+        </button>
+      </div>
+
+      <!-- Right side -->
+      <div class="header-right">
+        <div class="powered-by">
+          <span class="powered-text">POWERED BY</span>
+          <img src="viam_logo.png" alt="Viam Logo" class="viam-logo" />
+        </div>
       </div>
     </div>
-    <br>
-    <div class="key">
-      <p class="title">Status Key:</p>
-      <p class="available">✓ Data available</p>
-      <p class="unavailable">✗ No data available</p>
+  </header>
+
+  <!-- Main content area -->
+  <main class="main-content">
+    <div class="content-container">
+      <div id="insert-readings">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Loading inventory data...</p>
+        </div>
+      </div>
     </div>
-    <p class="refresh-note">
-      After the data has loaded, you can refresh the page for updated inventory and totals.
-    </p>
-  </div>
+  </main>
+
+  <script type="module" src="main.js"></script>
+
+  <script>
+    function showCurrentView() {
+      setActiveTab(0);
+      // Your existing functionality works here
+    }
+
+    function showHistoryView() {
+      setActiveTab(1);
+      console.log('History view - could show multiple receipts');
+    }
+
+    function setActiveTab(index) {
+      document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+        btn.classList.toggle('active', i === index);
+      });
+    }
+  </script>
 </body>
 
 </html>
