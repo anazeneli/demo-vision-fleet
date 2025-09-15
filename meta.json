@@ -1,0 +1,13 @@
+{
+  "module_id": "azeneli:demo-vision-fleet",
+  "visibility": "public",
+  "url": "https://github.com/anazeneli/demo-vision-fleet",
+  "description": "OCR inventory dashboard displaying receipt data from Google Vision sensors",
+  "applications": [
+    {
+      "name": "ocr-inventory-dashboard",
+      "type": "multi_machine",
+      "entrypoint": "static/index.html"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+
+<head>
+  <title>Inventory Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div id="main">
+    <div>
+      <h1>Inventory Dashboard</h1>
+    </div>
+    <script type="module" src="main.js"></script>
+    <div>
+      <h2>Receipt Items & Totals</h2>
+      <p>The following shows grouped inventory items and spending totals from recent receipts:</p>
+    </div>
+    <div id="insert-readings">
+      <div class="spinner-container">
+        <div class="spinner"></div>
+        <p><i>Loading inventory data...
+            It may take a few moments for the data to load.
+            Do not refresh page.</i></p>
+      </div>
+    </div>
+    <br>
+    <div class="key">
+      <p class="title">Status Key:</p>
+      <p class="available">✓ Data available</p>
+      <p class="unavailable">✗ No data available</p>
+    </div>
+    <p class="refresh-note">
+      After the data has loaded, you can refresh the page for updated inventory and totals.
+    </p>
+  </div>
+</body>
+
+</html>
