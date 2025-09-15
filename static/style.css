@@ -1,5 +1,4 @@
 /* Modern CSS for OCR Dashboard */
-
 * {
   margin: 0;
   padding: 0;
@@ -106,12 +105,6 @@ body {
   color: #1e40af;
 }
 
-.tab-btn.active:hover {
-  border-color: #1e40af;
-  background-color: #eff6ff;
-  color: #1e40af;
-}
-
 /* Header right */
 .header-right {
   display: none;
@@ -128,12 +121,6 @@ body {
   color: #71717a;
 }
 
-.viam-brand {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #18181b;
-}
-
 .viam-logo {
   height: 1.5rem;
 }
@@ -148,7 +135,6 @@ body {
   margin: 0 auto;
 }
 
-/* Loading state */
 .loading-state {
   text-align: center;
   padding: 3rem;
@@ -177,7 +163,7 @@ body {
   }
 }
 
-/* Receipt cards - enhanced styling for your existing content */
+/* Receipt cards */
 .inner-div {
   background: white;
   border: 1px solid #e4e4e7;
@@ -196,7 +182,6 @@ body {
   background-color: #fef2f2;
 }
 
-/* Receipt content styling */
 .receipt-header h3 {
   color: #1e40af;
   margin-bottom: 1rem;
@@ -218,6 +203,7 @@ body {
   margin: 0.5rem 0;
 }
 
+/* FIX: This rule removes the default browser bullet points */
 .items-section ul {
   list-style: none;
   padding: 0;
@@ -243,7 +229,36 @@ body {
   font-size: 0.875rem;
 }
 
-/* Responsive design */
+/* ENHANCEMENT: Styles for the new fleet management view */
+.fleet-log-header {
+  margin-bottom: 1.5rem;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.metric-item {
+  background-color: #f8fafc;
+  padding: 1rem;
+  border-radius: 0.375rem;
+  border: 1px solid #e2e8f0;
+}
+
+.metric-item-label {
+  font-size: 0.875rem;
+  color: #71717a;
+  margin-bottom: 0.25rem;
+}
+
+.metric-item-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e40af;
+}
+
 @media (min-width: 600px) {
   .header-text {
     display: block;
@@ -261,15 +276,5 @@ body {
 
   .header-right {
     display: block;
-  }
-}
-
-@media (min-width: 1024px) {
-  .header-content {
-    padding: 1rem 1.5rem;
-  }
-
-  .main-content {
-    padding: 3rem 1.5rem;
   }
 }

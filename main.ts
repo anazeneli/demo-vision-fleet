@@ -1,236 +1,210 @@
-console.log("Script loaded - starting dashboard");
-
-// OCR Sensor dashboard
-
 import * as VIAM from "@viamrobotics/sdk";
 import { BSON } from "bson";
 import Cookies from "js-cookie";
 
-let access_token = "";
-let fragmentID = "c59e453d-b811-4cce-bb20-862867045ed6";
-let location_id = "";
+// --- CONFIGURATION ---
+const fragmentID = "c59e453d-b811-4cce-bb20-862867045ed6";
+const SENSOR_NAME = "google-vision-sensor-ocr";
 
-async function main() {
+// --- GLOBAL STATE ---
+let viamClient: VIAM.ViamClient;
+const contentArea = document.getElementById("insert-readings")!;
+const currentReceiptBtn = document.getElementById("current-receipt-btn")!;
+const inventoryBtn = document.getElementById("inventory-btn")!;
 
-  const opts: VIAM.ViamClientOptions = {
-    serviceHost: "https://app.viam.com",
-    credentials: {
-      type: "access-token",
-      payload: access_token,
-    },
-  };
+/**
+ * Main initialization function.
+ */
+async function initializeApp() {
+  try {
+    const userTokenRawCookie = Cookies.get("userToken")!;
+    const userTokenValue = userTokenRawCookie.slice(userTokenRawCookie.indexOf("{"), userTokenRawCookie.indexOf("}") + 1);
+    const accessToken = JSON.parse(userTokenValue).access_token;
 
-  // Instantiate data_client and get all readings 
-  const client = await VIAM.createViamClient(opts);
-  const dataClient = client.dataClient;
-  let locationSummaries: any[] = [];
-  if (fragmentID !== "") {
-    locationSummaries = await client.appClient.listMachineSummaries("", [fragmentID]);
-  } else if (location_id !== "") {
-    locationSummaries = await client.appClient.listMachineSummaries("", [], [location_id]);
-  } else {
-    locationSummaries = await client.appClient.listMachineSummaries("");
+    viamClient = await VIAM.createViamClient({
+      serviceHost: "https://app.viam.com",
+      credentials: { type: "access-token", payload: accessToken },
+    });
+
+    currentReceiptBtn.addEventListener('click', showCurrentReceiptView);
+    inventoryBtn.addEventListener('click', showInventoryView);
+    await showCurrentReceiptView();
+
+  } catch (error) {
+    console.error("Initialization Failed:", error);
+    renderError("Initialization Failed. Are you logged into app.viam.com in another tab?");
   }
+}
 
-  let measurements: any[] = [];
-  let htmlblock: HTMLElement = document.createElement("div");
-  let location_orgID_mapping: any[] = [];
+/**
+ * Shows the "Current Receipt" view.
+ */
+async function showCurrentReceiptView() {
+  setActiveTab(currentReceiptBtn);
+  showLoadingState("Loading Current Receipt Data...");
 
-  console.log("Location summaries:", locationSummaries);
+  const dataClient = viamClient.dataClient;
+  const locationSummaries = await viamClient.appClient.listMachineSummaries("", [fragmentID]);
+  const htmlblock = document.createElement("div");
 
-
-  // Get all the machine IDs from accessible machines
-  for (let locationSummary of locationSummaries) {
-    console.log(locationSummary);
-    let machines = locationSummary.machineSummaries;
-    for (let machine of machines) {
-      let machineID = machine.machineId;
-      let machineName = machine.machineName;
-      let orgID = "";
-
-      if (location_orgID_mapping.includes(locationSummary.locationId)) {
-        orgID = location_orgID_mapping[locationSummary.locationId];
-      } else {
-        // Get the full location details to access organizationId
-        let locationDetails = await client.appClient.getLocation(locationSummary.locationId);
-        orgID = locationDetails?.organizations[0].organizationId || "";
-
-        location_orgID_mapping[locationSummary.locationId] = orgID;
-      }
-
-      console.log({ machineID, machineName, orgID });
-
-      const match_query = {
-        $match: {
-          robot_id: machineID,
-          "component_name": "google-vision-sensor-ocr",
-          time_requested: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
-        }
-      };
-
-      const sort_stage = {
-        $sort: { time_requested: -1 }
-      };
-
-      const limit_stage = {
-        $limit: 1
-      };
-
-      // Get the sensor data for the current machine
+  for (const locationSummary of locationSummaries) {
+    for (const machine of locationSummary.machineSummaries) {
+      const locationDetails = await viamClient.appClient.getLocation(locationSummary.locationId);
+      const orgID = locationDetails?.organizations[0].organizationId || "";
       const BSONQueryForData = [
-        BSON.serialize(match_query),
-        BSON.serialize(sort_stage),
-        BSON.serialize(limit_stage)
+        BSON.serialize({ $match: { robot_id: machine.machineId, component_name: SENSOR_NAME, time_requested: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } } }),
+        BSON.serialize({ $sort: { time_requested: -1 } }),
+        BSON.serialize({ $limit: 1 })
       ];
 
-      try {
-        let machineMeasurements: any = await dataClient?.tabularDataByMQL(
-          orgID,
-          BSONQueryForData,
-        );
-        measurements[machineID] = machineMeasurements;
-        console.log(`Machine measurements for ${machineName}:`, measurements[machineID]);
-      } catch (error) {
-        console.error(`Error getting data for machine ${machineID}:`, error);
-      }
+      const machineMeasurements = await dataClient.tabularDataByMQL(orgID, BSONQueryForData);
+      const insideDiv = document.createElement("div");
 
-      let insideDiv: HTMLElement = document.createElement("div");
-
-      if (!measurements[machineID] || measurements[machineID].length === 0) {
-        console.log(`No measurements found for machine ${machineID}`);
+      if (!machineMeasurements || machineMeasurements.length === 0) {
         insideDiv.className = "inner-div unavailable";
-        insideDiv.innerHTML = "<p>" + machineName + ": No data</p>";
-        htmlblock.appendChild(insideDiv);
+        insideDiv.innerHTML = `<p>${machine.machineName}: No data in the last 24 hours</p>`;
       } else {
-        let latestReading = measurements[machineID][0]; // The full record
-        let readings = latestReading?.data?.readings;
-        let items = readings?.items || [];
-        let metrics = readings?.metrics;
-        let totals = readings?.totals;
-        let store = readings?.store;
-
-        console.log(`Latest reading for ${machineName}:`, latestReading);
-        console.log(`Readings object:`, readings);
-        console.log(`Items found for ${machineName}:`, items);
+        insideDiv.className = "inner-div available";
+        const latestReading = machineMeasurements[0];
+        const readings = latestReading?.data?.readings;
+        const items = readings?.items || [];
+        const metrics = readings?.metrics;
+        const totals = readings?.totals;
+        const store = readings?.store;
 
         if (readings && items.length > 0) {
-          insideDiv.className = "inner-div available";
+          let itemsHTML = `<div class="receipt-header"><h3>${machine.machineName} - ${store?.name || 'Unknown Store'}</h3></div>`;
 
-          let itemsHTML = `<div class="receipt-header">
-            <h3>${machineName} - ${store?.name || 'Unknown Store'}</h3>
-          </div>`;
-
-          // Show metrics
           if (metrics) {
             itemsHTML += `<div class="metrics">
-              <p><strong>Receipt Summary:</strong></p>
-              <p>Items: ${metrics.item_count} | Unique Items: ${metrics.unique_descriptions}</p>
-              <p>Items Sum: $${(metrics.sum_items || 0).toFixed(2)} | Total Match: ${metrics.sum_matches_total ? '✓ Yes' : '✗ No'}</p>
-            </div>`;
+                            <p><strong>Receipt Summary:</strong></p>
+                            <p>Items: ${metrics.item_count} | Unique Items: ${metrics.unique_descriptions}</p>
+                            <p>Items Sum: $${(metrics.sum_items || 0).toFixed(2)} | Total Match: ${metrics.sum_matches_total ? '✓ Yes' : '✗ No'}</p>
+                        </div>`;
           }
 
-          // Show totals
           if (totals) {
             itemsHTML += `<div class="totals">
-              <p><strong>Receipt Total: $${(totals.total || 0).toFixed(2)}</strong></p>
-              <p>Subtotal: $${(totals.subtotal || 0).toFixed(2)} | Tax: $${(totals.tax || 0).toFixed(2)}</p>
-            </div>`;
+                            <p><strong>Receipt Total: $${(totals.total || 0).toFixed(2)}</strong></p>
+                            <p>Subtotal: $${(totals.subtotal || 0).toFixed(2)} | Tax: $${(totals.tax || 0).toFixed(2)}</p>
+                        </div>`;
           }
 
-          // Clean item names and group by description
-          let groupedItems: { [key: string]: { count: number, price: number } } = {};
-
-
+          const groupedItems: { [key: string]: { count: number, price: number } } = {};
           items.forEach((item: any) => {
-            // Skip items with no description
-            if (!item.desc || item.desc.trim() === '') {
-              return;
-            }
-            let cleanDesc = item.desc
-              // Remove UPC codes (12+ digits) and any single letters that follow
-              .replace(/\s+\d{12,}\s*[A-Z]*\s*$/g, '')
-              // Remove any remaining trailing single letters (like F, X, O, N)
-              .replace(/\s+[A-Z]\s*$/g, '')
-              // Clean up multiple spaces
-              .replace(/\s+/g, ' ')
-              .trim();
-
-            // If cleaning removed everything, keep just the product name part
-            if (cleanDesc.length < 2) {
-              cleanDesc = item.desc.replace(/\b\d{12,}\b/g, '').trim();
-            }
-
-            // If still empty or just numbers, skip this item
-            if (cleanDesc.length < 2 || /^\d+$/.test(cleanDesc)) {
-              return;
-            }
+            if (!item.desc || item.desc.trim() === '') return;
+            let cleanDesc = item.desc.replace(/\s+\d{12,}\s*[A-Z]*\s*$/g, '').replace(/\s+[A-Z]\s*$/g, '').replace(/\s+/g, ' ').trim();
+            if (cleanDesc.length < 2) { cleanDesc = item.desc.replace(/\b\d{12,}\b/g, '').trim(); }
+            if (cleanDesc.length < 2 || /^\d+$/.test(cleanDesc)) return;
 
             if (groupedItems[cleanDesc]) {
               groupedItems[cleanDesc].count += 1;
               groupedItems[cleanDesc].price += (item.price || 0);
             } else {
-              groupedItems[cleanDesc] = {
-                count: 1,
-                price: (item.price || 0)
-              };
+              groupedItems[cleanDesc] = { count: 1, price: (item.price || 0) };
             }
           });
 
-          console.log(`Grouped items for ${machineName}:`, groupedItems);
-
-          itemsHTML += `<div class="items-section">
-            <p><strong>Items Purchased:</strong></p>
-            <ul>`;
-
+          itemsHTML += `<div class="items-section"><p><strong>Items Purchased:</strong></p><ul>`;
           Object.entries(groupedItems).forEach(([desc, data]) => {
-            itemsHTML += "<li>" + desc + " - $" + data.price.toFixed(2);
-            if (data.count > 1) {
-              itemsHTML += " (" + data.count + "x)";
-            }
-            itemsHTML += "</li>";
+            itemsHTML += `<li>${desc}<span>$${data.price.toFixed(2)}`;
+            if (data.count > 1) { itemsHTML += ` (${data.count}x)`; }
+            itemsHTML += `</span></li>`;
           });
+          itemsHTML += `</ul></div>`;
 
-          itemsHTML += `</ul>
-            <p><small>Total unique items: ${Object.keys(groupedItems).length}</small></p>
-          </div>`;
-
-          // Add timestamp if available
           if (readings.timestamp) {
-            const receiptDate = new Date(readings.timestamp * 1000).toLocaleString();
-            itemsHTML += `<div class="timestamp">
-              <p><small>Receipt processed: ${receiptDate}</small></p>
-            </div>`;
+            itemsHTML += `<div class="timestamp"><p><small>Processed: ${new Date(readings.timestamp * 1000).toLocaleString()}</small></p></div>`;
           }
-
           insideDiv.innerHTML = itemsHTML;
         } else {
           insideDiv.className = "inner-div unavailable";
-          insideDiv.innerHTML = "<p>" + machineName + ": No receipt data available</p>";
+          insideDiv.innerHTML = `<p>${machine.machineName}: No receipt data available in the latest reading</p>`;
         }
-        htmlblock.appendChild(insideDiv);
       }
+      htmlblock.appendChild(insideDiv);
     }
   }
-
-  console.log("Final HTML block:", htmlblock);
-
-  // Add the block of HTML with color-coded boxes for each machine
-  document.getElementById("insert-readings")?.replaceWith(htmlblock);
-
-  return;
+  contentArea.innerHTML = '';
+  contentArea.appendChild(htmlblock);
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
+/**
+ * Shows the "Inventory" view with high-level fleet data.
+ */
+async function showInventoryView() {
+  setActiveTab(inventoryBtn);
+  showLoadingState("Loading Inventory Log...");
 
-  const userTokenRawCookie = Cookies.get("userToken")!;
-  const startIndex = userTokenRawCookie.indexOf("{");
-  const endIndex = userTokenRawCookie.indexOf("}");
-  const userTokenValue = userTokenRawCookie.slice(startIndex, endIndex + 1);
-  access_token = JSON.parse(userTokenValue).access_token;
+  const dataClient = viamClient.dataClient;
+  const locationSummaries = await viamClient.appClient.listMachineSummaries("", [fragmentID]);
 
-  console.log("Dashboard starting with access token:", access_token ? "✓ Found" : "✗ Missing");
-
-  main().catch((error) => {
-    console.error("encountered an error:", error);
+  const machineNames: { [key: string]: string } = {};
+  locationSummaries.forEach(summary => {
+    summary.machineSummaries.forEach((m: any) => { machineNames[m.machineId] = m.machineName; });
   });
-});
+
+  const locationDetails = await viamClient.appClient.getLocation(locationSummaries[0].locationId);
+  const orgID = locationDetails?.organizations[0].organizationId;
+
+  const BSONQuery = [
+    BSON.serialize({ $match: { "tags": "ocr-sensor", "component_name": SENSOR_NAME } }),
+    BSON.serialize({ $sort: { time_requested: -1 } }),
+    BSON.serialize({ $limit: 10 })
+  ];
+
+  const inventoryData = await dataClient.tabularDataByMQL(orgID, BSONQuery);
+
+  if (inventoryData.length === 0) {
+    contentArea.innerHTML = `<div class="inner-div unavailable"><p>No inventory data found.</p></div>`;
+    return;
+  }
+
+  let inventoryHTML = `<div class="fleet-log-header"><h2>High-Level Inventory Log</h2></div>`;
+  inventoryData.forEach(record => {
+    const { data, time_requested, robot_id } = record;
+    const { store, metrics, totals } = data.readings || {};
+
+    inventoryHTML += `
+            <div class="inner-div available">
+                <div class="receipt-header">
+                    <h3>${machineNames[robot_id] || 'Unknown Machine'}</h3>
+                    <p>${store?.name || 'Unknown Store'} - ${locationDetails.name}</p>
+                    <small>Processed: ${new Date(time_requested).toLocaleString()}</small>
+                </div>
+                <div class="metric-grid">
+                    <div class="metric-item">
+                        <div class="metric-item-label">Total</div>
+                        <div class="metric-item-value">$${(totals?.total || 0).toFixed(2)}</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-item-label">Item Count</div>
+                        <div class="metric-item-value">${metrics?.item_count || 0}</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-item-label">Unique Items</div>
+                        <div class="metric-item-value">${metrics?.unique_descriptions || 0}</div>
+                    </div> 
+                </div>
+            </div>
+        `;
+  });
+  contentArea.innerHTML = inventoryHTML;
+}
+
+// --- HELPER FUNCTIONS ---
+function setActiveTab(activeButton: HTMLElement) {
+  [currentReceiptBtn, inventoryBtn].forEach(button => button.classList.remove('active'));
+  activeButton.classList.add('active');
+}
+
+function showLoadingState(message: string) {
+  contentArea.innerHTML = `<div class="loading-state"><div class="spinner"></div><p>${message}</p></div>`;
+}
+
+function renderError(message: string) {
+  contentArea.innerHTML = `<div class="inner-div unavailable"><p>${message}</p></div>`;
+}
+
+// --- APP ENTRY POINT ---
+document.addEventListener("DOMContentLoaded", initializeApp);
