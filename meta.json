@@ -5,9 +5,9 @@
   "description": "OCR inventory dashboard displaying receipt data from Google Vision sensors",
   "applications": [
     {
-      "name": "ocr-inventory-dashboard",
-      "type": "multi_machine",
-      "entrypoint": "static/index.html"
+      "name": "dashboard",
+      "type": "single_machine",
+      "entrypoint": "dist/index.html"
     }
   ]
 }
